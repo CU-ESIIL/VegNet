@@ -114,3 +114,33 @@ stan_data <- list(
 str(stan_data)
 
 ```
+
+```{r}
+library(rstan)
+mod <- stan_model(here("scripts/stan/ricker_ss_hurdle_lognormal.stan"))
+
+
+fit <- sampling(
+  mod,
+  chains = 3,
+  cores = 3,
+  data = stan_data
+)
+
+```
+
+# Deterministic skeleton (process error fixed to zero)
+
+```{r fit-det}
+mod_det <- stan_model(here("scripts/stan/ricker_det_hurdle_lognormal.stan"))
+
+fit_det <- sampling(
+  mod_det,
+  chains = 3,
+  cores = 3,
+  data = stan_data
+)
+
+print(fit_det, pars = c("r", "A", "B", "sigma_obs", "theta0", "theta1"))
+get_num_divergent(fit_det)
+```
