@@ -7,7 +7,7 @@ source(here("scripts/simulations/terrestrial_lottery_sim_functions.R"))
 # setup parameters
 
   # lattice size along one margin
-  cells <- 50
+  cells <- 20
 
   # neighborhood size
   nbrhood_radius <- 3
@@ -23,14 +23,15 @@ source(here("scripts/simulations/terrestrial_lottery_sim_functions.R"))
   # vector of intra-specific competitive effects
 #  alpha <- rgamma(nsp, shape = 3, rate = 1)
   alpha <- c(
-    sort(runif(S+1, min = 3.8, max = 4)),
+    sort(runif(S, min = 3.8, max = 4)),
     runif(s, min = 3.8, max = 4)
   )
 
   # competition matrix
   # A_mat <- comp_matrix(n_sp = nsp, alpha = alpha, rho = c(0.01, 0.4), num_ngs = S, num_regs = 0)
-  A_mat <- comp_matrix2(n_sp = nsp, alpha = alpha, rho = 0, num_ngs = S)
+  A_mat <- comp_matrix(n_sp = nsp, alpha = alpha, rho = 0, num_ngs = S)
 
+  # FIXME
 
   # max per-capita fecundity
   # lambda <- c(
@@ -38,8 +39,8 @@ source(here("scripts/simulations/terrestrial_lottery_sim_functions.R"))
   #   rgamma(s, shape = 10, rate = 1)
   # )
   lambda_max <- c(
-    runif(5, min = 45, max = 50),
-    runif(45, min = 10, max = 15)
+    runif(S, min = 45, max = 50),
+    runif(s, min = 10, max = 15)
   )
   sp_optims <- runif(nsp, min = -0.2, max = 0.2)
 
@@ -49,14 +50,14 @@ source(here("scripts/simulations/terrestrial_lottery_sim_functions.R"))
   #   runif(s, min = 0.1, max = 0.5)
   # )
   Pr_death <- c(
-    rep(1, 5),
-    runif(45, min = 0.05, max = 0.2)
+    rep(1, S)
+#    runif(45, min = 0.05, max = 0.2)
   )
 
   # dispersal rates for each species
   disp_rate <- c(
-    runif(S),
-    runif(s, min = 0, max = 3)
+    runif(S)
+    #runif(s, min = 0, max = 3)
   )
 
   # initialize lattice
