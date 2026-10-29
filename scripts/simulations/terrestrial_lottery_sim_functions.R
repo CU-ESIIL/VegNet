@@ -508,7 +508,7 @@ die_replace <- function(X, prob_death, seed_rain){
   sp_coords <- lapply(
     1:S,
     FUN = function(x, lattice){
-      which(lattice == x, arr.ind = T)
+      which(as.array(lattice) == x, arr.ind = TRUE)
     },
     lattice = X
   )

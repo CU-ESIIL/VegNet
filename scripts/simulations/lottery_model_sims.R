@@ -16,8 +16,8 @@ source(here("scripts/simulations/terrestrial_lottery_sim_functions.R"))
   steps <- 50
 
   # species
-  S <- 5 # number of strong competitors
-  s <- 0 # number weak competitors
+  S <- 2 # number of strong competitors
+  s <- 2 # number weak competitors
   nsp <- S + s
 
   # vector of intra-specific competitive effects
@@ -29,19 +29,14 @@ source(here("scripts/simulations/terrestrial_lottery_sim_functions.R"))
 
   # competition matrix
   # A_mat <- comp_matrix(n_sp = nsp, alpha = alpha, rho = c(0.01, 0.4), num_ngs = S, num_regs = 0)
-  A_mat <- comp_matrix(n_sp = nsp, alpha = alpha, rho = 0, num_ngs = S)
-
-  # FIXME
+  A_mat <- comp_matrix(n_sp = nsp, alpha = alpha, rho = 0.3, num_ngs = S)
 
   # max per-capita fecundity
   # lambda <- c(
   #   rgamma(S + 1, shape = 40, rate = 1),
   #   rgamma(s, shape = 10, rate = 1)
   # )
-  lambda_max <- c(
-    runif(S, min = 45, max = 50),
-    runif(s, min = 10, max = 15)
-  )
+  lambda_max <- runif(nsp, 10, 50)
   sp_optims <- runif(nsp, min = -0.2, max = 0.2)
 
   # probability an individual dies in a given time point for each species
@@ -49,14 +44,11 @@ source(here("scripts/simulations/terrestrial_lottery_sim_functions.R"))
   #   rep(1, 1 + S),
   #   runif(s, min = 0.1, max = 0.5)
   # )
-  Pr_death <- c(
-    rep(1, S)
-#    runif(45, min = 0.05, max = 0.2)
-  )
+  Pr_death <- seq(0.3, 1, length.out = nsp) |> sample(size = nsp)
 
   # dispersal rates for each species
   disp_rate <- c(
-    runif(S)
+    runif(nsp, min = 0, max = 3)
     #runif(s, min = 0, max = 3)
   )
 
