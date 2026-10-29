@@ -1,0 +1,116 @@
+---
+title: "Testing the state-space lognormal mixture model"
+format: html
+---
+
+```{r}
+library(here)
+library(tidyverse)
+
+gophers <- read_csv(here("data/Jasper_Ridge/JR_gopher-disturbance.csv"))
+cover <- read_csv(
+  here("data/Jasper_Ridge/JR_cover.csv")
+) %>%
+  filter(treatment == "c")
+
+cover <- left_join(
+  cover, gophers,
+  by = c("quadID", "year")
+)
+
+# take small subset of plots
+plots <- sample(unique(cover$quadID), size = 5)
+cover <- cover %>%
+  filter(quadID %in% plots)
+
+# now join the precip data
+precip <- read_csv(here("data/Jasper_Ridge/JR_rain.csv"))
+
+cover <- left_join(cover, precip, by = "year")
+
+```
+
+# Adding formatting data for stan
+
+```{r dat-for-stan}
+
+# focal species: the most abundant taxa (drop non-plant cover classes)
+n_species <- 6
+focal_sp <- cover %>%
+  filter(!species %in% c("BARE", "ROCK")) %>%
+  group_by(species) %>%
+  summarise(mean_cover = mean(cover, na.rm = TRUE)) %>%
+  slice_max(mean_cover, n = n_species) %>%
+  pull(species)
+
+plot_ids <- sort(unique(cover$quadID))
+years <- sort(unique(cover$year))
+
+# one row per plot x year x species, with implicit gaps made explicit (NA)
+cover_stan <- cover %>%
+  filter(species %in% focal_sp) %>%
+  select(quadID, year, species, cover) %>%
+  complete(
+    quadID = plot_ids,
+    year = years,
+    species = focal_sp
+  ) %>%
+  mutate(
+    quadID = factor(quadID, levels = plot_ids),
+    year = factor(year, levels = years),
+    species = factor(species, levels = focal_sp)
+  ) %>%
+  arrange(quadID, year, species)
+
+P <- length(plot_ids)
+T <- length(years)
+S <- length(focal_sp)
+
+# rows are sorted with species fastest, then year, then plot, so fill an
+# [S, T, P] array and permute to the [P, T, S] layout Stan expects
+to_pts <- function(v) aperm(array(v, dim = c(S, T, P)), c(3, 2, 1))
+
+# scale percent cover to proportions so exp(x) and A are O(1)
+y_raw <- to_pts(cover_stan$cover / 100)
+obs <- ifelse(is.na(y_raw), 0L, 1L)
+y <- ifelse(is.na(y_raw), 0, y_raw)
+
+# environmental covariates per plot x year: precip (year) and gophers (plot-year)
+env <- cover %>%
+  distinct(quadID, year, growing_season_ppt, disturb) %>%
+  complete(quadID = plot_ids, year = years) %>%
+  mutate(
+    ppt_z = as.numeric(scale(log(growing_season_ppt))),
+    disturb_z = as.numeric(scale(disturb)),
+    # standardized covariates, so missing values are filled at the mean (0)
+    across(c(ppt_z, disturb_z), ~ replace_na(.x, 0)),
+    quadID = factor(quadID, levels = plot_ids),
+    year = factor(year, levels = years)
+  ) %>%
+  arrange(quadID, year)
+
+env_vars <- c("ppt_z", "disturb_z")
+K <- length(env_vars)
+X_env <- array(NA_real_, dim = c(P, T, K))
+for (k in seq_len(K)) {
+  X_env[, , k] <- matrix(env[[env_vars[k]]], nrow = P, ncol = T, byrow = TRUE)
+}
+
+# prior for initial log densities, centered on observed nonzero first-year cover
+y1_pos <- y[, 1, ][obs[, 1, ] == 1 & y[, 1, ] > 0]
+
+stan_data <- list(
+  P = P,
+  T = T,
+  S = S,
+  K = K,
+  y = y,
+  obs = obs,
+  X_env = X_env,
+  mu0_mean = mean(log(y1_pos)),
+  mu0_sd = 1.5
+)
+
+str(stan_data)
+
+```

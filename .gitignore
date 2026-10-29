@@ -56,3 +56,5 @@ node_modules/
 site/
 test-results/
 .positai
+
+data/*
