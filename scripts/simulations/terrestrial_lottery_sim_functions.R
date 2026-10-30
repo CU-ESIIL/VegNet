@@ -570,3 +570,123 @@ die_replace <- function(X, prob_death, seed_rain){
 
 
 
+#' Count neighbors of each type in a neighborhood (vectorized)
+#'
+#' Drop-in replacement for \code{kernel_count()} that sums shifted copies of a
+#' zero-padded indicator matrix for each species instead of looping over cells.
+#' Returns the same array as \code{kernel_count()}.
+#'
+#' @param X Matrix with species IDs in each cell in the lattice
+#' @param r Radius of the neighborhood (in a lattice)
+#' @param sp_list List of species IDs. Should be numeric and starting at 1 (e.g, 1--4 for a 4 species model)
+#'
+#' @return An array with \eqn{S} slices of matrices of equal dimension to X, where each slice is the
+#' count of species \eqn{s} in the neighborhood around each cell (focal cell excluded).
+#' @export
+#'
+#' @examples
+#' X <- matrix(sample(1:3, 16, replace = T), nrow = 4, ncol = 4)
+#' kernel_count_fast(X, r = 1, sp_list = 1:3)
+#'
+kernel_count_fast <- function(X, r, sp_list){
+
+  M <- nrow(X)
+  J <- ncol(X)
+  S <- length(sp_list)
+
+  n <- array(0, dim = c(M, J, S))
+  for(s in 1:S){
+    I_s <- (X == sp_list[s]) * 1
+
+    # pad with zeros so cells off the lattice contribute nothing
+    pad <- matrix(0, nrow = M + 2 * r, ncol = J + 2 * r)
+    pad[r + 1:M, r + 1:J] <- I_s
+
+    # sum the (2r + 1)^2 shifted windows, then remove the focal cell
+    tot <- matrix(0, nrow = M, ncol = J)
+    for(dr in -r:r){
+      for(dc in -r:r){
+        tot <- tot + pad[r + dr + 1:M, r + dc + 1:J]
+      }
+    }
+    n[, , s] <- tot - I_s
+  }
+
+  return(n)
+}
+
+
+
+
+
+#' Seed rain array (vectorized)
+#'
+#' Drop-in replacement for \code{seed_rain_array()}. Seeds sent to each ring of
+#' (Chebyshev) distance \eqn{d} are split evenly among the ring cells that fall
+#' inside the lattice, exactly as in \code{seed_rain_array()}, but the rain is
+#' built by summing shifted weight matrices rather than looping over cells.
+#'
+#' @param F_mat Matrix of fecundities for each individual in the lattice
+#' @param X Lattice with numeric species IDs (1, 2, 3, ..., S) for the individual in each cell
+#' @param d_max Max distance (vertical and horizontal, not diagonal) for dispersal
+#' @param rate Exponential rate parameter(s) for each species defining the dispersal kernel
+#' (vector of length \eqn{S} or a scalar).
+#' @param nsp Number of species
+#'
+#' @return An \eqn{M \times J \times S} array of seed rain into each cell from each species.
+#' @export
+#'
+#' @examples
+#' X <- matrix(sample(1:3, 16, replace = T), nrow = 4)
+#' F_mat <- matrix(rgamma(16, shape = 10), nrow = 4)
+#' seed_rain_array_fast(F_mat, X, d_max = 2, rate = c(0.5, 1, 2), nsp = 3)
+#'
+seed_rain_array_fast <- function(F_mat, X, d_max, rate = 1, nsp){
+
+  S <- nsp
+  M <- nrow(X)
+  J <- ncol(X)
+
+  if(length(rate) == 1){
+    rate <- rep(rate, S)
+  }
+
+  # number of in-lattice cells within Chebyshev distance d of each source cell
+  box_count <- function(d){
+    rows <- pmin(1:M + d, M) - pmax(1:M - d, 1) + 1
+    cols <- pmin(1:J + d, J) - pmax(1:J - d, 1) + 1
+    outer(rows, cols)
+  }
+
+  # in-lattice ring sizes for each source cell (ring 0 is the cell itself)
+  ring_size <- lapply(0:d_max, function(d){
+    if(d == 0) return(matrix(1, nrow = M, ncol = J))
+    box_count(d) - box_count(d - 1)
+  })
+
+  seeds <- array(data = 0, dim = c(M, J, S))
+  for(s in 1:S){
+    F_s <- F_mat * (X == s)
+    if(sum(F_s) == 0) next
+
+    for(d in 0:d_max){
+      W <- F_s * P_d_exp(d = d, d_max, lambda = rate[s])
+      W <- ifelse(ring_size[[d + 1]] > 0, W / ring_size[[d + 1]], 0)
+
+      pad <- matrix(0, nrow = M + 2 * d, ncol = J + 2 * d)
+      pad[d + 1:M, d + 1:J] <- W
+
+      # add the shifted weights for every offset exactly d away
+      for(dr in -d:d){
+        for(dc in -d:d){
+          if(max(abs(dr), abs(dc)) == d){
+            seeds[, , s] <- seeds[, , s] + pad[d + dr + 1:M, d + dc + 1:J]
+          }
+        }
+      }
+    }
+  }
+
+  return(seeds)
+
+}

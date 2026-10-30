@@ -3,54 +3,43 @@ library(here)
 library(ggplot2)
 
 source(here("scripts/simulations/terrestrial_lottery_sim_functions.R"))
+source(here("scripts/simulations/lottery_param_functions.R"))
 
 # setup parameters
 
   # lattice size along one margin
-  cells <- 20
+  cells <- 60
 
   # neighborhood size
   nbrhood_radius <- 3
 
-  # time steps
-  steps <- 50
+  # max dispersal distance
+  d_max <- 5
 
-  # species
-  S <- 2 # number of strong competitors
-  s <- 2 # number weak competitors
-  nsp <- S + s
+  # time steps (the first burn_in steps are discarded after the run)
+  steps <- 300
+  burn_in <- 100
 
-  # vector of intra-specific competitive effects
-#  alpha <- rgamma(nsp, shape = 3, rate = 1)
-  alpha <- c(
-    sort(runif(S, min = 3.8, max = 4)),
-    runif(s, min = 3.8, max = 4)
-  )
+  # immigration from the regional pool, relative to mean local seed rain
+  m <- 0.01
 
-  # competition matrix
-  # A_mat <- comp_matrix(n_sp = nsp, alpha = alpha, rho = c(0.01, 0.4), num_ngs = S, num_regs = 0)
-  A_mat <- comp_matrix(n_sp = nsp, alpha = alpha, rho = 0.3, num_ngs = S)
+  # environment
+  sigma_env <- 0.1    # variation in the environment
+  phi <- 0.4          # autocorrelation across time steps
 
-  # max per-capita fecundity
-  # lambda <- c(
-  #   rgamma(S + 1, shape = 40, rate = 1),
-  #   rgamma(s, shape = 10, rate = 1)
-  # )
-  lambda_max <- runif(nsp, 10, 50)
-  sp_optims <- runif(nsp, min = -0.2, max = 0.2)
+  # species placed along a perennial (z = 0) to annual (z = 1) axis
+  nsp <- 15
+  z <- draw_life_history(nsp)
 
-  # probability an individual dies in a given time point for each species
-  # Pr_death <- c(
-  #   rep(1, 1 + S),
-  #   runif(s, min = 0.1, max = 0.5)
-  # )
-  Pr_death <- seq(0.3, 1, length.out = nsp) |> sample(size = nsp)
+  # death, fecundity, dispersal, env response, and self-regulation from z
+  pars <- life_history_params(z, sigma_env = sigma_env, phi = phi, d_max = d_max)
+  Pr_death <- pars$Pr_death
+  lambda_max <- pars$lambda_max
+  disp_rate <- pars$disp_rate
+  sp_optims <- pars$optims
 
-  # dispersal rates for each species
-  disp_rate <- c(
-    runif(nsp, min = 0, max = 3)
-    #runif(s, min = 0, max = 3)
-  )
+  # competition matrix: limiting similarity + perennial-over-annual asymmetry
+  A_mat <- comp_matrix_gradient(z, alpha = pars$alpha)
 
   # initialize lattice
   X <- matrix(
@@ -67,8 +56,6 @@ source(here("scripts/simulations/terrestrial_lottery_sim_functions.R"))
   ts_all[[1]] <- X
 
   # track environment
-  sigma_env <- 0.1    # variation in the environment
-  phi <- 0.4          # autocorrelation across time steps
   env <- vector(mode = "double", length = steps)
   env[1] <- rnorm(1, sd = sigma_env/sqrt(1 - phi^2))
 
@@ -77,12 +64,12 @@ source(here("scripts/simulations/terrestrial_lottery_sim_functions.R"))
   for(t in 1:(steps-1)){
 
     # count neighbors of each species around each cell
-    nbrs_t <- kernel_count(ts_all[[t]], r = nbrhood_radius, sp_list = 1:nsp)
+    nbrs_t <- kernel_count_fast(ts_all[[t]], r = nbrhood_radius, sp_list = 1:nsp)
 
     # get fecundity matrix by applying the fecundidty_ll() command to each row of X
     Fecundity <- t(sapply(
       1:cells,
-      FUN = function(x, lattice, lambda_t, alpha, nbrhood, n){
+      FUN = function(x, lattice, alpha, nbrhood, n){
         fecundity_ll(
           foc_sp = lattice[x, ],
           lambda_max = lambda_max,
@@ -90,24 +77,27 @@ source(here("scripts/simulations/terrestrial_lottery_sim_functions.R"))
           env_t = env[t],
           alpha = alpha,
           nbrhood = nbrhood[x, ],
-          n = n[x, , ]
+          n = n[x, , ],
+          sigma = pars$sigma
         )
       },
       lattice = ts_all[[t]],
-      lambda_t = lambda,
       alpha = A_mat,
       nbrhood = n_neighbors,
       n = nbrs_t
     ))
 
     # calculate seed rain into each cell by each species
-    sr_t <- seed_rain_array(
+    sr_t <- seed_rain_array_fast(
       F_mat = Fecundity,
       X = ts_all[[t]],
-      d_max = 5,
+      d_max = d_max,
       rate = disp_rate,
       nsp = nsp
     )
+
+    # add immigrant seeds from the regional pool
+    sr_t <- add_immigration(sr_t, m = m)
 
     # kill off and replace some adults with seedlings
     ts_all[[t+1]] <- die_replace(
@@ -120,6 +110,16 @@ source(here("scripts/simulations/terrestrial_lottery_sim_functions.R"))
     env[t + 1] <- phi * env[t] + rnorm(1, sd = sigma_env)
 
   }
+
+# coexistence and clumping along the life-history axis (after burn-in)
+  diagnostics <- landscape_diagnostics(ts_all, z = z, burn_in = burn_in)
+  diagnostics
+  attr(diagnostics, "n_persist")
+
+# drop the burn-in so ts_all[[t]] and env[t] stay aligned downstream
+  ts_all <- ts_all[(burn_in + 1):steps]
+  env <- env[(burn_in + 1):steps]
+  steps <- length(ts_all)
 
 # get percent cover dataframe
   cover_df <- data.frame(
@@ -136,22 +136,14 @@ source(here("scripts/simulations/terrestrial_lottery_sim_functions.R"))
     )
   }
   cover_df$cover <- cover
+  cover_df$z <- z[cover_df$species]
   cover_df$species <- as.factor(cover_df$species)
 
-  ggplot(data = cover_df, aes(x = t, y = cover, color = species))+
+  # color by life history: 0 = perennial, 1 = annual
+  ggplot(data = cover_df, aes(x = t, y = cover, group = species, color = z))+
     geom_line()+
-    theme_classic()+
-    theme(legend.position = "none")
-
-# are the strongly competing species negatively correlated?
-  cover_trunc <- cover_df[cover_df$t >= 100, ]
-  cor.test(
-    cover_trunc$cover[cover_trunc$species == 2],
-    cover_trunc$cover[cover_trunc$species == 3]
-  )
-
-# how many species coexist?
-  sum(cover_df[cover_df$t == steps, ]$cover > 0)
+    scale_color_viridis_c()+
+    theme_classic()
 
 
 

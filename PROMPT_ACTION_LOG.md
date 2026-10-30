@@ -267,3 +267,51 @@ Actions taken
 
 * Added data formatting to `notebooks/testing_lognormal_ss_mixture_model.qmd`: chooses the most abundant focal species, builds `[P, T, S]` `y`/`obs` arrays (cover scaled to proportions, missing values flagged), builds `X_env` from standardized log precipitation and gopher disturbance, and assembles the `stan_data` list.
 * Fixed out-of-bounds process-error indexing in `scripts/stan/ricker_ss_hurdle_lognormal.stan` (`z[p, t]` → `z[p, t - 1]`, since `z` has `T - 1` steps), and fixed two type errors in the same process equation (`B * to_vector(X_env[p, t - 1])`, `z[p, t - 1] .* sigma_proc`).
+
+2026-10-29
+
+Prompt
+
+User asked for a script that subsamples a large lottery-model landscape into `n_plots` sub-grids and structures plot-level cover in long, lagged format (cover at t = 2...T and t = 1...T-1, plus env, plot id, time, species).
+
+Actions taken
+
+* Added `scripts/simulations/subsample_lottery_plots.R` with `sample_plot_corners()` (random non-overlapping square plots), `plot_cover()` (per-plot, per-species proportion cover with explicit zeros), and `lag_cover()` (joins cover at t with t - 1; `env` is `env[t - 1]`, matching `X_env[p, t - 1]` in the Stan model).
+* Usage block sources `lottery_model_sims.R`; notes that `cells` must be raised for enough non-overlapping plots.
+
+2026-10-29
+
+Prompt
+
+User asked whether EM would fit the state-space hurdle model better; decided instead to fix process error to zero for now.
+
+Actions taken
+
+* Added `scripts/stan/ricker_det_hurdle_lognormal.stan`: copy of `ricker_ss_hurdle_lognormal.stan` with `sigma_proc` and `z` removed (deterministic Ricker skeleton, observation error only). Hurdle likelihood and generated quantities unchanged; `A` prior kept as-is, with the comment corrected (A is unbounded).
+* Added a `fit-det` chunk to `notebooks/testing_lognormal_ss_mixture_model.qmd` that fits the deterministic model to the same `stan_data` and prints parameter summaries and divergence count.
+
+2026-10-30
+
+Prompt
+
+User asked for lottery-model parameter initialization that gives many coexisting species along a perennial-to-annual gradient (perennials: few seeds, low death, clumped; annuals: many propagules), replacing the strong/weak competitor framing, so large landscapes can be subsampled to test zero-handling approaches (drop zeros, lump rare species, state-space hurdle model).
+
+Actions taken
+
+* Added `scripts/simulations/lottery_param_functions.R`: `draw_life_history()` (life-history axis z, 0 = perennial, 1 = annual), `life_history_params()` (death, fecundity, dispersal, env sensitivity, optima, and self-regulation from z; fecundity tied to death rate as an equalizing trade-off, corrected for seeds retained in the parent cell), `comp_matrix_gradient()` (limiting similarity on z plus perennial-over-annual asymmetry), `add_immigration()` (small regional seed rain), and `landscape_diagnostics()` (persistence, mean cover, clumping index).
+* Appended `kernel_count_fast()` and `seed_rain_array_fast()` to `terrestrial_lottery_sim_functions.R`: vectorized versions verified to match `kernel_count()`/`seed_rain_array()` (the originals return NaN on lattices smaller than the dispersal ring; the fast versions return 0). Originals kept.
+* Updated `lottery_model_sims.R`: 60x60 lattice, 15 species on the z gradient, 300 steps with 100 burn-in dropped (ts_all and env stay aligned), immigration m = 0.01, `sigma` now passed to `fecundity_ll()`, diagnostics and a z-colored cover plot replace the stale correlation check.
+* Updated `subsample_lottery_plots.R`: adds `z` to `plot_df`; updated the landscape-size note.
+* Test run (seed 42): all 15 species persist; dominants at both ends of the gradient; plot-level zero frequency ranges from ~1% to ~97% across species. Run time ~50 s.
+
+2026-10-30
+
+Prompt
+
+User asked for references supporting the biological choices in `life_history_params()` and the stationary state of the lottery model, collected in a `references.bib` with comments saying where each applies.
+
+Actions taken
+
+* Added `scripts/simulations/references.bib` (40 entries, metadata and DOIs checked against Crossref), grouped by simulation component: lottery model and stationary state, life-history axis, fecundity-survival trade-off, dispersal and clumping, neighborhood competition, environmental response, and immigration. Each entry has a comment naming the function/argument it supports.
+* Comments flag that default numeric values are tuning choices (literature supports direction and form, not the numbers), and note caveats: perennial short dispersal stands in for clonal spread (dispersal distance scales with height), annuals get no storage-effect buffering without a seed bank, and burn_in = 100 is only ~3 generations for the longest-lived species.
+* Added a one-line pointer to the bib file at the top of `lottery_param_functions.R`.

@@ -1,0 +1,635 @@
+% References for the biological choices in the lottery-model simulations
+%   scripts/simulations/lottery_param_functions.R
+%   scripts/simulations/terrestrial_lottery_sim_functions.R
+%   scripts/simulations/lottery_model_sims.R
+%
+% Comments above each entry say which simulation choice it supports.
+% Metadata and DOIs were checked against Crossref (2026-10-30).
+%
+% NOTE: the specific default values (p_death = c(0.03, 1), f0 = 150,
+% disp_rate = c(2, 0.2), sigma_env_sens = c(10, 40), rho_max = 0.5,
+% overlap_width = 0.3, hierarchy = 1, m = 0.01, the z^2 death curve) are
+% tuning choices made to get many coexisting species in a 60 x 60 lattice.
+% The literature below supports the direction and form of each choice, not
+% these exact numbers.
+
+
+% =====================================================================
+% 1. The lottery model and its stationary state
+% =====================================================================
+
+% Origin of the lottery idea: open sites (here, cells vacated by death in
+% die_replace()) are won at random in proportion to propagule arrival
+% (seed_rain), so many species can share space.
+@article{sale1977,
+  author  = {Sale, Peter F.},
+  title   = {Maintenance of High Diversity in Coral Reef Fish Communities},
+  journal = {The American Naturalist},
+  year    = {1977},
+  volume  = {111},
+  number  = {978},
+  pages   = {337--359},
+  doi     = {10.1086/283164}
+}
+
+% The lottery model: adults die with probability delta_i (Pr_death) and
+% vacant sites go to species in proportion to their propagule output.
+% - In a constant environment the recursion gives the invasion criterion
+%   lambda_i / delta_i > lambda_r / delta_r, which is the basis for tying
+%   lambda_max to Pr_death in life_history_params() (equalizing trade-off).
+% - With fluctuating recruitment (env[t] and the species-specific optima) and
+%   overlapping generations (Pr_death < 1), species coexist through the
+%   storage effect. This is the stationary state the burn-in in
+%   lottery_model_sims.R is meant to reach.
+@article{chesson1981lottery,
+  author  = {Chesson, Peter L. and Warner, Robert R.},
+  title   = {Environmental Variability Promotes Coexistence in Lottery Competitive Systems},
+  journal = {The American Naturalist},
+  year    = {1981},
+  volume  = {117},
+  number  = {6},
+  pages   = {923--943},
+  doi     = {10.1086/283778}
+}
+
+% Storage effect requirements, mapped onto the simulation:
+% (i) species-specific responses to the environment (optims, sigma);
+% (ii) covariance between environment and competition (good years raise
+%     seed rain of the favored species);
+% (iii) buffered population growth, i.e. long-lived adults (low Pr_death
+%     at low z). Strict annuals (Pr_death = 1, no seed bank in this model)
+%     get no buffering and so gain little from the storage effect; they
+%     persist mainly through high fecundity, dispersal, and immigration.
+@article{warner1985storage,
+  author  = {Warner, Robert R. and Chesson, Peter L.},
+  title   = {Coexistence Mediated by Recruitment Fluctuations: A Field Guide to the Storage Effect},
+  journal = {The American Naturalist},
+  year    = {1985},
+  volume  = {125},
+  number  = {6},
+  pages   = {769--787},
+  doi     = {10.1086/284379}
+}
+
+% Multispecies generalization of the lottery/storage-effect framework. Supports
+% using one shared temporal environment (env[t]) with species-specific
+% responses to maintain many (nsp = 15) rather than two species.
+@article{chesson1994multispecies,
+  author  = {Chesson, P.},
+  title   = {Multispecies Competition in Variable Environments},
+  journal = {Theoretical Population Biology},
+  year    = {1994},
+  volume  = {45},
+  number  = {3},
+  pages   = {227--276},
+  doi     = {10.1006/tpbi.1994.1013}
+}
+
+% Stabilizing vs. equalizing mechanisms. The parameterization strategy is
+% (a) equalize: fecundity proportional to death rate, with small fitness_sd
+%     noise, keeps fitness ratios near 1 across the life-history axis;
+% (b) stabilize: intra > inter competition (diag of comp_matrix_gradient()),
+%     the storage effect, and crowding within clumps.
+@article{chesson2000mechanisms,
+  author  = {Chesson, Peter},
+  title   = {Mechanisms of Maintenance of Species Diversity},
+  journal = {Annual Review of Ecology and Systematics},
+  year    = {2000},
+  volume  = {31},
+  number  = {1},
+  pages   = {343--366},
+  doi     = {10.1146/annurev.ecolsys.31.1.343}
+}
+
+% Coexistence requires niche differences to overcome fitness differences;
+% small fitness differences (fitness_sd) need only weak stabilization.
+@article{adler2007niche,
+  author  = {Adler, Peter B. and HilleRisLambers, Janneke and Levine, Jonathan M.},
+  title   = {A niche for neutrality},
+  journal = {Ecology Letters},
+  year    = {2007},
+  volume  = {10},
+  number  = {2},
+  pages   = {95--104},
+  doi     = {10.1111/j.1461-0248.2006.00996.x}
+}
+
+% Review of plant coexistence mechanisms; general support for combining
+% several weak stabilizing mechanisms in a plant community model.
+@article{silvertown2004niche,
+  author  = {Silvertown, Jonathan},
+  title   = {Plant coexistence and the niche},
+  journal = {Trends in Ecology \& Evolution},
+  year    = {2004},
+  volume  = {19},
+  number  = {11},
+  pages   = {605--611},
+  doi     = {10.1016/j.tree.2004.09.003}
+}
+
+% Discrete, spatially explicit (lattice) versions of competition models can
+% behave very differently from mean-field ones. This is why the stationary
+% state is checked by simulation (landscape_diagnostics()) rather than taken
+% from the non-spatial lottery result.
+@article{durrett1994discrete,
+  author  = {Durrett, R. and Levin, S.},
+  title   = {The Importance of Being Discrete (and Spatial)},
+  journal = {Theoretical Population Biology},
+  year    = {1994},
+  volume  = {46},
+  number  = {3},
+  pages   = {363--394},
+  doi     = {10.1006/tpbi.1994.1032}
+}
+
+% Recruitment limitation: when not every vacant site gets seeds of every
+% species (short dispersal), competitive exclusion slows dramatically and
+% inferior competitors persist. Relevant to the long-transient /
+% burn-in question: perennials with Pr_death ~ 0.03 have mean lifespans of
+% ~33 steps, so burn_in = 100 is only ~3 generations for them, and their
+% cover can still drift slowly after burn-in.
+@article{hurtt1995recruitment,
+  author  = {Hurtt, George C. and Pacala, Stephen W.},
+  title   = {The consequences of recruitment limitation: reconciling chance, history and competitive differences between plants},
+  journal = {Journal of Theoretical Biology},
+  year    = {1995},
+  volume  = {176},
+  number  = {1},
+  pages   = {1--12},
+  doi     = {10.1006/jtbi.1995.0170}
+}
+
+
+% =====================================================================
+% 2. The life-history axis z (draw_life_history())
+% =====================================================================
+
+% Plant life histories vary mainly along a fast-slow continuum (short-lived,
+% high reproduction vs. long-lived, low reproduction) plus a reproductive
+% strategy axis. z is a one-dimensional stand-in for the fast-slow axis.
+@article{salguerogomez2016fastslow,
+  author  = {Salguero-G{\'o}mez, Roberto and Jones, Owen R. and Jongejans, Eelke and Blomberg, Simon P. and Hodgson, David J. and Mbeau-Ache, Cyril and Zuidema, Pieter A. and de Kroon, Hans and Buckley, Yvonne M.},
+  title   = {Fast--slow continuum and reproductive strategies structure plant life-history variation worldwide},
+  journal = {Proceedings of the National Academy of Sciences},
+  year    = {2016},
+  volume  = {113},
+  number  = {1},
+  pages   = {230--235},
+  doi     = {10.1073/pnas.1506215112}
+}
+
+% Earlier comparative evidence for the fast-slow continuum in plants.
+@article{franco1996fastslow,
+  author  = {Franco, Miguel and Silvertown, Jonathan},
+  title   = {Life history variation in plants: an exploration of the fast-slow continuum hypothesis},
+  journal = {Philosophical Transactions of the Royal Society of London. Series B: Biological Sciences},
+  year    = {1996},
+  volume  = {351},
+  number  = {1345},
+  pages   = {1341--1348},
+  doi     = {10.1098/rstb.1996.0117}
+}
+
+% Ruderal (high z: annual, high fecundity, colonizing) vs. competitor /
+% stress-tolerator (low z: perennial, persistent) strategies.
+@article{grime1977strategies,
+  author  = {Grime, J. P.},
+  title   = {Evidence for the Existence of Three Primary Strategies in Plants and Its Relevance to Ecological and Evolutionary Theory},
+  journal = {The American Naturalist},
+  year    = {1977},
+  volume  = {111},
+  number  = {982},
+  pages   = {1169--1194},
+  doi     = {10.1086/283244}
+}
+
+% General theory of life-history trade-offs (survival vs. reproduction) that
+% motivates deriving all species parameters from one axis.
+@book{stearns1992evolution,
+  author    = {Stearns, Stephen C.},
+  title     = {The Evolution of Life Histories},
+  publisher = {Oxford University Press},
+  address   = {Oxford},
+  year      = {1992}
+}
+
+
+% =====================================================================
+% 3. Fecundity-survival trade-off (lambda_max and Pr_death in
+%    life_history_params())
+% =====================================================================
+
+% Species with high annual seed output are shorter-lived, so seed output
+% per lifetime is roughly similar across species. This is the empirical
+% basis for lambda_max = f0 * Pr_death (annual output proportional to death
+% rate, so lifetime output, lambda / delta, is roughly constant along z).
+@article{moles2004seeds,
+  author  = {Moles, Angela T. and Falster, Daniel S. and Leishman, Michelle R. and Westoby, Mark},
+  title   = {Small-seeded species produce more seeds per square metre of canopy per year, but not per individual per lifetime},
+  journal = {Journal of Ecology},
+  year    = {2004},
+  volume  = {92},
+  number  = {3},
+  pages   = {384--396},
+  doi     = {10.1111/j.0022-0477.2004.00880.x}
+}
+
+% Seed size / seed number trade-offs across the whole life cycle; supports
+% annuals (high z) producing many small propagules and perennials few.
+@article{moles2006seedsize,
+  author  = {Moles, Angela T. and Westoby, Mark},
+  title   = {Seed size and plant strategy across the whole life cycle},
+  journal = {Oikos},
+  year    = {2006},
+  volume  = {113},
+  number  = {1},
+  pages   = {91--105},
+  doi     = {10.1111/j.0030-1299.2006.14194.x}
+}
+
+% Seed vs. microsite limitation of recruitment. Annuals regenerate only from
+% seed each year (Pr_death = 1); perennials are limited mainly by open sites
+% (microsites), which in the lattice only appear when an adult dies.
+@article{eriksson1992limitation,
+  author  = {Eriksson, O. and Ehrl{\'e}n, J.},
+  title   = {Seed and microsite limitation of recruitment in plant populations},
+  journal = {Oecologia},
+  year    = {1992},
+  volume  = {91},
+  number  = {3},
+  pages   = {360--364},
+  doi     = {10.1007/BF00317624}
+}
+
+
+% =====================================================================
+% 4. Dispersal and clumping (disp_rate in life_history_params(),
+%    seed_rain_array_fast(), clumping index in landscape_diagnostics())
+% =====================================================================
+
+% Short dispersal produces intraspecific clumping. Clumped species compete
+% mostly with conspecifics, which is stabilizing. Short dispersal also has a
+% cost: many seeds land near the parent in already occupied sites. This cost
+% is why life_history_params() divides lambda_max by 1 - P(d = 0), so that
+% the equalizing trade-off applies to seeds that actually leave the parent
+% cell.
+@article{bolker1999spatial,
+  author  = {Bolker, Benjamin M. and Pacala, Stephen W.},
+  title   = {Spatial Moment Equations for Plant Competition: Understanding Spatial Strategies and the Advantages of Short Dispersal},
+  journal = {The American Naturalist},
+  year    = {1999},
+  volume  = {153},
+  number  = {6},
+  pages   = {575--602},
+  doi     = {10.1086/303199}
+}
+
+% Experimental evidence that intraspecific aggregation changes competitive
+% outcomes and can let weaker competitors persist. Supports clumped
+% perennials as a coexistence-promoting spatial structure.
+@article{stoll2001aggregation,
+  author  = {Stoll, Peter and Prati, Daniel},
+  title   = {Intraspecific aggregation alters competitive interactions in experimental plant communities},
+  journal = {Ecology},
+  year    = {2001},
+  volume  = {82},
+  number  = {2},
+  pages   = {319--327},
+  doi     = {10.1890/0012-9658(2001)082[0319:IAACII]2.0.CO;2}
+}
+
+% Seed shadows are leptokurtic and decline steeply with distance from the
+% parent. Supports a monotone decreasing kernel (the discretized exponential
+% in P_d_exp()). Note: real kernels often have fatter tails than an
+% exponential, and d_max = 5 truncates long-distance dispersal.
+@article{nathan2000dispersal,
+  author  = {Nathan, Ran and Muller-Landau, Helene C.},
+  title   = {Spatial patterns of seed dispersal, their determinants and consequences for recruitment},
+  journal = {Trends in Ecology \& Evolution},
+  year    = {2000},
+  volume  = {15},
+  number  = {7},
+  pages   = {278--285},
+  doi     = {10.1016/S0169-5347(00)01874-7}
+}
+
+% Fitted seed dispersal kernels; most seeds fall near the parent, with a
+% long tail. Same use as nathan2000dispersal.
+@article{clark1999dispersal,
+  author  = {Clark, James S. and Silman, Miles and Kern, Ruth and Macklin, Eric and HilleRisLambers, Janneke},
+  title   = {Seed Dispersal Near and Far: Patterns Across Temperate and Tropical Forests},
+  journal = {Ecology},
+  year    = {1999},
+  volume  = {80},
+  number  = {5},
+  pages   = {1475--1494},
+  doi     = {10.1890/0012-9658(1999)080[1475:SDNAFP]2.0.CO;2}
+}
+
+% CAVEAT for the disp_rate gradient: across species, dispersal distance
+% scales with plant height more than seed mass, so tall woody perennials
+% often disperse farther than annuals. The short-dispersal perennials in
+% this model are meant to represent herbaceous / bunchgrass perennials,
+% whose clumping comes largely from clonal (vegetative) spread. The high
+% disp_rate at low z is a stand-in for that, not a claim about seed
+% dispersal distance per se.
+@article{thomson2011dispersal,
+  author  = {Thomson, Fiona J. and Moles, Angela T. and Auld, Tony D. and Kingsford, Richard T.},
+  title   = {Seed dispersal distance is more strongly correlated with plant height than with seed mass},
+  journal = {Journal of Ecology},
+  year    = {2011},
+  volume  = {99},
+  number  = {6},
+  pages   = {1299--1307},
+  doi     = {10.1111/j.1365-2745.2011.01867.x}
+}
+
+% Clonal (lateral) spread is common in perennial herbs of temperate floras;
+% the source of clumped, slow-spreading perennials represented by high
+% disp_rate at low z.
+@article{klimesova2009clopla,
+  author  = {Klime{\v{s}}ov{\'a}, Jitka and de Bello, Francesco},
+  title   = {{CLO-PLA}: the database of clonal and bud bank traits of Central European flora},
+  journal = {Journal of Vegetation Science},
+  year    = {2009},
+  volume  = {20},
+  number  = {3},
+  pages   = {511--516},
+  doi     = {10.1111/j.1654-1103.2009.01050.x}
+}
+
+% Competition-colonization trade-off: good colonizers (high fecundity,
+% far dispersal; high z) coexist with good competitors (low z) in spatially
+% structured habitats. Supports pairing far dispersal and high fecundity
+% with weaker competitive effects on others (hierarchy in
+% comp_matrix_gradient()).
+@article{tilman1994competition,
+  author  = {Tilman, David},
+  title   = {Competition and Biodiversity in Spatially Structured Habitats},
+  journal = {Ecology},
+  year    = {1994},
+  volume  = {75},
+  number  = {1},
+  pages   = {2--16},
+  doi     = {10.2307/1939377}
+}
+
+% Competition-colonization dynamics specifically in annual plant
+% assemblages; the trade-off maintains diversity only under some
+% conditions. A reminder that the z gradient alone does not guarantee
+% coexistence, which is why the other mechanisms are included.
+@article{levine2002annual,
+  author  = {Levine, Jonathan M. and Rees, Mark},
+  title   = {Coexistence and Relative Abundance in Annual Plant Assemblages: The Roles of Competition and Colonization},
+  journal = {The American Naturalist},
+  year    = {2002},
+  volume  = {160},
+  number  = {4},
+  pages   = {452--467},
+  doi     = {10.2307/3079234}
+}
+
+
+% =====================================================================
+% 5. Neighborhood competition (fecundity_ll(), comp_matrix_gradient())
+% =====================================================================
+
+% Fecundity declines hyperbolically with neighbor density,
+% lambda / (1 + sum_j alpha_ij n_j). This is the functional form in
+% fecundity_ll().
+@article{watkinson1980density,
+  author  = {Watkinson, A. R.},
+  title   = {Density-dependence in single-species populations of plants},
+  journal = {Journal of Theoretical Biology},
+  year    = {1980},
+  volume  = {83},
+  number  = {2},
+  pages   = {345--357},
+  doi     = {10.1016/0022-5193(80)90297-0}
+}
+
+% Neighborhood models: an individual's fecundity depends on neighbors
+% within a fixed radius (nbrhood_radius), normalized by neighborhood size
+% (count_neighbors()).
+@article{pacala1985neighborhood,
+  author  = {Pacala, Stephen W. and Silander, J. A.},
+  title   = {Neighborhood Models of Plant Population Dynamics. I. Single-Species Models of Annuals},
+  journal = {The American Naturalist},
+  year    = {1985},
+  volume  = {125},
+  number  = {3},
+  pages   = {385--411},
+  doi     = {10.1086/284349}
+}
+
+% Annual plant competition model with the same hyperbolic fecundity form,
+% fitted to field data; shows that stabilizing niche differences
+% (intra > inter) maintain plant diversity. Supports A_ii > A_ij in
+% comp_matrix_gradient().
+@article{levine2009niches,
+  author  = {Levine, Jonathan M. and HilleRisLambers, Janneke},
+  title   = {The importance of niches for the maintenance of species diversity},
+  journal = {Nature},
+  year    = {2009},
+  volume  = {461},
+  number  = {7261},
+  pages   = {254--257},
+  doi     = {10.1038/nature08251}
+}
+
+% Limiting similarity: competition increases with niche overlap. This is the
+% basis for the Gaussian overlap term
+% exp(-(z_i - z_j)^2 / (2 * overlap_width^2)) in comp_matrix_gradient().
+@article{macarthur1967limiting,
+  author  = {MacArthur, Robert and Levins, Richard},
+  title   = {The Limiting Similarity, Convergence, and Divergence of Coexisting Species},
+  journal = {The American Naturalist},
+  year    = {1967},
+  volume  = {101},
+  number  = {921},
+  pages   = {377--385},
+  doi     = {10.1086/282505}
+}
+
+% Global analysis of tree competition: competitive effects depend on both
+% trait similarity and trait hierarchy (one species' trait value relative to
+% another's). These are the two terms of comp_matrix_gradient(): overlap
+% (similarity) and exp(hierarchy * (z_i - z_j) / 2) (hierarchy). Note that
+% Kunstler et al. found the hierarchy effects stronger than the similarity
+% effects.
+@article{kunstler2016traits,
+  author  = {Kunstler, Georges and Falster, Daniel and Coomes, David A. and Hui, Francis and Kooyman, Robert M. and Laughlin, Daniel C. and Poorter, Lourens and Vanderwel, Mark and Vieilledent, Ghislain and Wright, S. Joseph and others},
+  title   = {Plant functional traits have globally consistent effects on competition},
+  journal = {Nature},
+  year    = {2016},
+  volume  = {529},
+  number  = {7585},
+  pages   = {204--207},
+  doi     = {10.1038/nature16476}
+}
+
+% California grasslands: established native perennial bunchgrasses are
+% strong competitors against exotic annuals, yet annuals dominate through
+% recruitment and colonization. Supports the direction of the asymmetry
+% (perennials suppress annual fecundity more than the reverse,
+% hierarchy > 0).
+@article{seabloom2003invasion,
+  author  = {Seabloom, Eric W. and Harpole, W. Stanley and Reichman, O. J. and Tilman, David},
+  title   = {Invasion, competitive dominance, and resource use by exotic and native {California} grassland species},
+  journal = {Proceedings of the National Academy of Sciences},
+  year    = {2003},
+  volume  = {100},
+  number  = {23},
+  pages   = {13384--13389},
+  doi     = {10.1073/pnas.1835728100}
+}
+
+
+% =====================================================================
+% 6. Environmental response (sigma, optims in life_history_params();
+%    AR(1) env in lottery_model_sims.R)
+% =====================================================================
+
+% Longer-lived species are buffered against climatic variability, while
+% short-lived species are more sensitive. Supports sigma increasing with z
+% (annuals respond more strongly to env[t]).
+@article{morris2008longevity,
+  author  = {Morris, William F. and Pfister, Catherine A. and Tuljapurkar, Shripad and Haridas, Chirrakal V. and Boggs, Carol L. and Boyce, Mark S. and Bruna, Emilio M. and Church, Don R. and Coulson, Tim and Doak, Daniel F. and others},
+  title   = {Longevity Can Buffer Plant and Animal Populations Against Changing Climatic Variability},
+  journal = {Ecology},
+  year    = {2008},
+  volume  = {89},
+  number  = {1},
+  pages   = {19--25},
+  doi     = {10.1890/07-0774.1}
+}
+
+% Demographic buffering: vital rates with large effects on fitness (adult
+% survival in long-lived species) vary less. Same use as morris2008longevity.
+@article{pfister1998variance,
+  author  = {Pfister, Catherine A.},
+  title   = {Patterns of variance in stage-structured populations: Evolutionary predictions and ecological implications},
+  journal = {Proceedings of the National Academy of Sciences},
+  year    = {1998},
+  volume  = {95},
+  number  = {1},
+  pages   = {213--218},
+  doi     = {10.1073/pnas.95.1.213}
+}
+
+% Empirical storage effect in perennial grasses driven by interannual
+% climate. Supports species-specific optima on a shared temporal
+% environment, with long-lived species benefiting from it.
+@article{adler2006climate,
+  author  = {Adler, Peter B. and HilleRisLambers, Janneke and Kyriakidis, Phaedon C. and Guan, Qingfeng and Levine, Jonathan M.},
+  title   = {Climate variability has a stabilizing effect on the coexistence of prairie grasses},
+  journal = {Proceedings of the National Academy of Sciences},
+  year    = {2006},
+  volume  = {103},
+  number  = {34},
+  pages   = {12793--12798},
+  doi     = {10.1073/pnas.0600599103}
+}
+
+% Storage effect in desert annuals, where buffering comes from a seed bank.
+% The current model has no seed bank, so strict annuals (Pr_death = 1)
+% cannot buffer bad years. Adding a seed bank would be the natural
+% extension if annuals need storage-effect support.
+@article{angert2009tradeoffs,
+  author  = {Angert, Amy L. and Huxman, Travis E. and Chesson, Peter and Venable, D. Lawrence},
+  title   = {Functional tradeoffs determine species coexistence via the storage effect},
+  journal = {Proceedings of the National Academy of Sciences},
+  year    = {2009},
+  volume  = {106},
+  number  = {28},
+  pages   = {11641--11645},
+  doi     = {10.1073/pnas.0904512106}
+}
+
+% Annual grassland composition at Jasper Ridge tracks interannual rainfall
+% and gopher disturbance. Grounds the strong env sensitivity of annuals and
+% links the simulation to the Jasper Ridge data used in
+% notebooks/testing_lognormal_ss_mixture_model.qmd.
+@article{hobbs1991rainfall,
+  author  = {Hobbs, Richard J. and Mooney, Harold A.},
+  title   = {Effects of Rainfall Variability and Gopher Disturbance on Serpentine Annual Grassland Dynamics},
+  journal = {Ecology},
+  year    = {1991},
+  volume  = {72},
+  number  = {1},
+  pages   = {59--68},
+  doi     = {10.2307/1938902}
+}
+
+% Environmental time series are typically reddened (positively
+% autocorrelated). Supports the AR(1) environment with phi = 0.4.
+@article{vasseur2004color,
+  author  = {Vasseur, David A. and Yodzis, Peter},
+  title   = {The Color of Environmental Noise},
+  journal = {Ecology},
+  year    = {2004},
+  volume  = {85},
+  number  = {4},
+  pages   = {1146--1152},
+  doi     = {10.1890/02-3122}
+}
+
+% Noise colour changes population extinction risk; another reason the AR(1)
+% autocorrelation (phi) matters for which species persist.
+@article{ripa1996noise,
+  author  = {Ripa, J{\"o}rgen and Lundberg, Per},
+  title   = {Noise colour and the risk of population extinctions},
+  journal = {Proceedings of the Royal Society of London. Series B: Biological Sciences},
+  year    = {1996},
+  volume  = {263},
+  number  = {1377},
+  pages   = {1751--1753},
+  doi     = {10.1098/rspb.1996.0256}
+}
+
+
+% =====================================================================
+% 7. Immigration from a regional pool (add_immigration(), m)
+% =====================================================================
+
+% Local communities receive immigrants from a metacommunity at rate m, which
+% replaces a vacated site with a propagule from the regional pool. This is
+% the structure of add_immigration(); meta_abund plays the role of the
+% metacommunity abundances.
+@book{hubbell2001neutral,
+  author    = {Hubbell, Stephen P.},
+  title     = {The Unified Neutral Theory of Biodiversity and Biogeography},
+  series    = {Monographs in Population Biology},
+  volume    = {32},
+  publisher = {Princeton University Press},
+  address   = {Princeton, NJ},
+  year      = {2001}
+}
+
+% Rescue effect: immigration reduces local extinction. This is why rare
+% species reappear in plots after zero-cover periods (useful for testing
+% the hurdle model).
+@article{brown1977rescue,
+  author  = {Brown, James H. and Kodric-Brown, Astrid},
+  title   = {Turnover Rates in Insular Biogeography: Effect of Immigration on Extinction},
+  journal = {Ecology},
+  year    = {1977},
+  volume  = {58},
+  number  = {2},
+  pages   = {445--449},
+  doi     = {10.2307/1935620}
+}
+
+% Source-sink metacommunities: dispersal among patches maintains local
+% diversity, but too much dispersal homogenizes and lowers regional
+% diversity. A reason to keep m small (default 0.01).
+@article{mouquet2003sourcesink,
+  author  = {Mouquet, Nicolas and Loreau, Michel},
+  title   = {Community Patterns in Source-Sink Metacommunities},
+  journal = {The American Naturalist},
+  year    = {2003},
+  volume  = {162},
+  number  = {5},
+  pages   = {544--557},
+  doi     = {10.1086/378857}
+}

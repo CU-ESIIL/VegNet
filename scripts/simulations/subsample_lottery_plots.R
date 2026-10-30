@@ -83,14 +83,17 @@ lag_cover <- function(cover_long, env){
   n_plots <- 30
   plot_size <- 5
 
-  # run the simulation to get ts_all, env, nsp, cells, and steps
-  #  NOTE: raise `cells` in lottery_model_sims.R (e.g., 100) so the
-  #  landscape fits n_plots non-overlapping plots
+  # run the simulation to get ts_all, env, nsp, cells, steps, and z
+  #  (burn-in already dropped). NOTE: `cells` in lottery_model_sims.R
+  #  must fit n_plots non-overlapping plots (60 cells fits 144 5x5 plots)
   source(here("scripts/simulations/lottery_model_sims.R"))
 
   corners <- sample_plot_corners(cells = cells, plot_size = plot_size, n_plots = n_plots)
   cover_long <- plot_cover(ts_all, corners = corners, plot_size = plot_size, nsp = nsp)
   plot_df <- lag_cover(cover_long, env = env)
+
+  # life-history position of each species (0 = perennial, 1 = annual)
+  plot_df$z <- z[as.integer(as.character(plot_df$species))]
 
   head(plot_df)
 
