@@ -44,10 +44,10 @@ lattice `X`, an `M x J` matrix of species IDs:
     `count_neighbors()` computes the (edge-corrected) size of that
     neighborhood for each cell.
 2.  **Fecundity.** `fecundity_ll()` gives each individual a Poisson
-    number of seeds with mean $`{\lambda_i(t) / (1 + C_{i,t})}`$, where
-    $`{\lambda_i(t) = \lambda_{\text{max},i} \exp(-\sigma_i (v_t - \mu_i)^2)}`$
+    number of seeds with mean \(\lambda_i(t) / (1 + C_{i,t})\), where
+    \(\lambda_i(t) = \lambda_{\text{max},i} \exp(-\sigma_i (v_t - \mu_i)^2)\)
     is maximized when the shared environmental variable `v_t` matches
-    the species’ optimum $`\mu_i`$, and the competition term $`C_{i,t}`$
+    the species’ optimum \(\mu_i\), and the competition term \(C_{i,t}\)
     is built from the neighbor counts and the competition matrix `A_mat`
     (Watkinson 1980; Levine and HilleRisLambers 2009).
 3.  **Dispersal / seed rain.** `seed_rain_array_fast()` (vectorized
@@ -86,28 +86,28 @@ colonize new openings, etc, we have taken the following approaches.
 
 Rather than drawing every species parameter independently,
 `lottery_param_functions.R` places each of the `nsp` species at a
-position $`{z \in [0,1]}`$ on a perennial ($`z=0`$) to annual ($`z=1`$)
+position \(z \in [0,1]\) on a perennial (\(z=0\)) to annual (\(z=1\))
 life-history axis (`draw_life_history()`, evenly spaced or
 Beta-distributed), motivated by the fast-slow continuum in plant life
 histories (Salguero-Gómez et al. 2016; Franco and Silvertown 1996; Grime
 1977; Stearns 1992). `life_history_params()` then derives every other
-species-level parameter from this draw $`z_i`$:
+species-level parameter from this draw \(z_i\):
 
-- **Death probability** is defined as $`P(\delta_{i,t}) = z_i^2`$, where
-  $`z_i = 1`$ gives a strict annual and $`z_i \to 0`$ results in a
-  long-lived perennial since $`P(\delta_{i,t}) \to 0`$.
+- **Death probability** is defined as \(P(\delta_{i,t}) = z_i^2\), where
+  \(z_i = 1\) gives a strict annual and \(z_i \to 0\) results in a
+  long-lived perennial since \(P(\delta_{i,t}) \to 0\).
 
-- We tie **Fecundity** ($`\lambda_\text{max}`$) to the death rate,
-  $`{\lambda_i \propto \delta_i}`$ because the lottery invasion
-  criterion is $`{\lambda_i/\delta_i > \lambda_r/\delta_r}`$ for an
-  invading species $`i`$ and a resident species $`r`$, holding
-  $`{\lambda/\delta}`$ roughly constant across species keeps fitness
+- We tie **Fecundity** (\(\lambda_\text{max}\)) to the death rate,
+  \(\lambda_i \propto \delta_i\) because the lottery invasion
+  criterion is \(\lambda_i/\delta_i > \lambda_r/\delta_r\) for an
+  invading species \(i\) and a resident species \(r\), holding
+  \(\lambda/\delta\) roughly constant across species keeps fitness
   differences small, so that the *stabilizing* mechanisms in the model
   (intra- \> inter-specific competition, local crowding, the storage
   effect, immigration) can maintain diversity (Chesson 2000; Adler et
   al. 2007; Moles et al. 2004). Fecundity is further divided by the
   fraction of seeds that actually leave the parent’s cell
-  ($`{1 - P(d=0)}`$), where $`d`$ is dispersal distance in discrete grid
+  (\(1 - P(d=0)\)), where \(d\) is dispersal distance in discrete grid
   steps, since seeds that fall back into an occupied cell are wasted,
   and `fitness_sd` adds log-normal noise so species aren’t exactly
   equal.
