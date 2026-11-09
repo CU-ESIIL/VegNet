@@ -690,3 +690,90 @@ seed_rain_array_fast <- function(F_mat, X, d_max, rate = 1, nsp){
   return(seeds)
 
 }
+
+
+
+
+#' Animate a simulated landscape as a GIF
+#'
+#' Renders a subset of the lattices stored by the lottery-model simulation
+#' loop (\code{ts_all} in \code{lottery_model_sims.R}) as a GIF, with each
+#' cell colored by the species occupying it. Requires the \pkg{gifski}
+#' package (and \pkg{viridisLite} if colors are mapped from \code{z}).
+#'
+#' @param ts_all List of lattices (one \eqn{M \times J} matrix of species IDs
+#' per time step), as produced by the simulation loop in
+#' \code{lottery_model_sims.R}.
+#' @param nsp Number of species in the model.
+#' @param steps Indices into \code{ts_all} to render, in the order they
+#' should appear in the GIF (default: every time step in \code{ts_all}).
+#' @param file Path to the output GIF file.
+#' @param z Optional vector of length \code{nsp} with each species'
+#' life-history position (0 = perennial, 1 = annual). When supplied, species
+#' are colored on a continuous viridis scale ordered by \code{z}, matching
+#' the cover-trajectory plots in \code{lottery_model_sims.R}.
+#' @param species_colors Optional vector of length \code{nsp} with an
+#' explicit color for species \eqn{1, 2, ..., nsp}; overrides \code{z}.
+#' @param fps Frames per second in the output GIF.
+#' @param width,height Pixel dimensions of the GIF.
+#'
+#' @return Invisibly, the path to the GIF file written to \code{file}.
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' landscape_gif(ts_all, nsp = nsp, z = z, steps = 1:100, file = "landscape.gif")
+#' }
+#'
+landscape_gif <- function(ts_all, nsp, steps = seq_along(ts_all), file = "landscape.gif",
+                           z = NULL, species_colors = NULL, fps = 10,
+                           width = 480, height = 480){
+
+  if(!requireNamespace("gifski", quietly = TRUE)){
+    stop("Package 'gifski' is required to render a GIF. Install it with install.packages('gifski').")
+  }
+
+  # one color per species: continuous viridis ordered by life history if
+  #  z is given, otherwise a qualitative palette
+  if(is.null(species_colors)){
+    if(!is.null(z)){
+      if(!requireNamespace("viridisLite", quietly = TRUE)){
+        stop("Package 'viridisLite' is required to color species by z. Install it with install.packages('viridisLite').")
+      }
+      species_colors <- viridisLite::viridis(nsp)[rank(z)]
+    } else{
+      species_colors <- grDevices::hcl.colors(nsp, palette = "Dark 3")
+    }
+  }
+
+  M <- nrow(ts_all[[steps[1]]])
+  J <- ncol(ts_all[[steps[1]]])
+
+  gifski::save_gif(
+    expr = {
+      for(t in steps){
+        X <- ts_all[[t]]
+
+        # flip rows so row 1 of the lattice plots at the top
+        z_mat <- t(X[M:1, , drop = FALSE])
+
+        graphics::par(mar = rep(0.5, 4))
+        graphics::image(
+          1:J, 1:M, z_mat,
+          col = species_colors,
+          breaks = seq(0.5, nsp + 0.5, by = 1),
+          axes = FALSE, ann = FALSE, asp = 1, useRaster = TRUE
+        )
+      }
+    },
+    gif_file = file,
+    width = width,
+    height = height,
+    delay = 1 / fps,
+    loop = TRUE,
+    progress = FALSE
+  )
+
+  invisible(file)
+
+}

@@ -17,7 +17,7 @@ source(here("scripts/simulations/lottery_param_functions.R"))
   d_max <- 5
 
   # time steps (the first burn_in steps are discarded after the run)
-  steps <- 300
+  steps <- 150
   burn_in <- 100
 
   # immigration from the regional pool, relative to mean local seed rain
@@ -29,7 +29,7 @@ source(here("scripts/simulations/lottery_param_functions.R"))
 
   # species placed along a perennial (z = 0) to annual (z = 1) axis
   nsp <- 15
-  z <- draw_life_history(nsp)
+  z <- draw_life_history(nsp, shape1 = 15, shape2 = 0.2, even = F)
 
   # death, fecundity, dispersal, env response, and self-regulation from z
   pars <- life_history_params(z, sigma_env = sigma_env, phi = phi, d_max = d_max)
@@ -120,6 +120,8 @@ source(here("scripts/simulations/lottery_param_functions.R"))
   ts_all <- ts_all[(burn_in + 1):steps]
   env <- env[(burn_in + 1):steps]
   steps <- length(ts_all)
+
+  landscape_gif(ts_all, nsp, steps = 1:steps)
 
 # get percent cover dataframe
   cover_df <- data.frame(
