@@ -1,0 +1,172 @@
+---
+title: "Simulation choices for lottery model"
+output: github_document
+bibliography: references.bib
+---
+
+## Overview
+
+The lottery model is based on @ellner_2022_spmct, which itself formalizes the
+classic lottery-competition idea of @sale1977 and @chesson1981lottery. At
+each time step some adults die, vacating cells in a spatial lattice, and the
+vacancies are won at random by propagules in proportion to how many
+each species has produced. @ellner_2022_spmct give each species unique responses to a fluctuating
+environment and allow for overlapping generations such that many species can
+coexist via the storage effect [@warner1985storage; @chesson1994multispecies].
+
+The simulation code lives in `scripts/simulations/` as four files:
+
+- **`terrestrial_lottery_sim_functions.R`** -- the mechanics of one time step
+  of the lottery model on an `M x J` lattice: counting neighbors, computing
+  fecundity under local competition and the environment, building the seed
+  rain each species casts across the lattice, and killing/replacing adults.
+- **`lottery_param_functions.R`** -- generates a biologically-motivated set of
+  species parameters and a competition matrix, plus a regional-immigration term and post-hoc diagnostics.
+- **`lottery_model_sims.R`** -- wires the two files above together to run a
+  full simulation and plot cover trajectories through time.
+- **`subsample_lottery_plots.R`** -- re-runs a simulation and subsamples the
+  resulting landscape into small, non-overlapping plots, producing a
+  long-format data frame (species, plot, and time-step columns) of lagged cover (`cover_t` vs.
+  `cover_tm1`) suitable for fitting a dynamic occupancy/cover model.
+
+
+### One time step of the lottery model
+
+Each time step of `lottery_model_sims.R` (coded in
+`terrestrial_lottery_sim_functions.R`) applies four operations to the
+lattice `X`, an `M x J` matrix of species IDs:
+
+1. **Count neighbors.** `kernel_count_fast()` (a vectorized version of
+   `kernel_count()`) tabulates, for every cell and every species, how many
+   conspecific/heterospecific individuals fall within a square neighborhood
+   of radius `nbrhood_radius` [@pacala1985neighborhood]. `count_neighbors()`
+   computes the (edge-corrected) size of that neighborhood for each cell.
+2. **Fecundity.** `fecundity_ll()` gives each individual a Poisson number of
+   seeds with mean
+   ${\lambda_i(t) / (1 + C_{i,t})}$, where
+   ${\lambda_i(t) = \lambda_{\text{max},i} \exp(-\sigma_i (v_t - \mu_i)^2)}$
+   is maximized when the shared environmental variable `v_t` matches the
+   species' optimum $\mu_i$, and the competition term $C_{i,t}$ is built from
+   the neighbor counts and the competition matrix `A_mat`
+   [@watkinson1980density; @levine2009niches].
+3. **Dispersal / seed rain.** `seed_rain_array_fast()` (vectorized version of
+   `seed_rain_array()`) spreads each cell's seeds outward over concentric
+   square rings up to `d_max`, using a truncated, discretized exponential
+   kernel `P_d_exp()` so that seed density declines monotonically with
+   distance [@nathan2000dispersal; @clark1999dispersal]. Seeds landing in a
+   ring are split evenly among the in-lattice cells of that ring. The result
+   is an `M x J x S` array of seed rain into every cell from every species.
+   `add_immigration()` then adds a small, uniform trickle of seeds from a
+   regional species pool to every cell (rate `m` relative to the mean local
+   seed rain), which prevents global extinction and keeps closed-population
+   artifacts from dominating the dynamics [@hubbell2001neutral;
+   @mouquet2003sourcesink].
+4. **Death and replacement.** `die_replace()` kills each individual
+   independently with its species' death probability, then replaces each
+   dead individual with a new one drawn with probability proportional to the
+   local seed rain from each species in that cell -- the actual "lottery."
+5. **Environment update.** Outside these functions, `lottery_model_sims.R`
+   advances a single shared AR(1) environmental covariate,
+   `env[t+1] = phi * env[t] + rnorm(sd = sigma_env)`, representing a
+   positively autocorrelated climate signal.
+
+## Initializing parameters
+
+Parameterizing the simulations takes care in order to generate 'realistic-looking' landscapes with many coexisting species. In an effort to initialize parameters in such a way as to promote biologically-realistic patterns, such as long-lived, large species that are clustered in space, short-lived annuals with high dispersal that can colonize new openings, etc, we have taken the following approaches.
+
+### Perennial - annual axis
+
+Rather than drawing every species parameter independently,
+`lottery_param_functions.R` places each of the `nsp` species at a position
+${z \in [0,1]}$ on a perennial ($z=0$) to annual ($z=1$) life-history axis
+(`draw_life_history()`, evenly spaced or Beta-distributed), motivated by the
+fast-slow continuum in plant life histories [@salguerogomez2016fastslow;
+@franco1996fastslow; @grime1977strategies; @stearns1992evolution].
+`life_history_params()` then derives every other species-level parameter from this draw $z_i$:
+
+- **Death probability** is defined as $P(\delta_{i,t}) = z_i^2$, where $z_i = 1$ gives a strict annual and $z_i \to 0$ results in a long-lived perennial since $P(\delta_{i,t}) \to 0$.
+  
+- We tie **Fecundity** ($\lambda_\text{max}$) to the death rate,
+  ${\lambda_i \propto \delta_i}$ because the lottery invasion criterion is ${\lambda_i/\delta_i > \lambda_r/\delta_r}$ for an invading species $i$ and a resident species $r$,
+  holding ${\lambda/\delta}$ roughly constant across species keeps fitness
+  differences small, so that the *stabilizing* mechanisms in the model
+  (intra- > inter-specific competition, local crowding, the storage effect,
+  immigration) can maintain diversity [@chesson2000mechanisms;
+  @adler2007niche; @moles2004seeds]. Fecundity is further divided by the
+  fraction of seeds that actually leave the parent's cell
+  (${1 - P(d=0)}$), where $d$ is dispersal distance in discrete grid steps, since seeds that fall back into an occupied cell are wasted, and `fitness_sd` adds log-normal noise so species aren't exactly equal.
+  
+- **Dispersal rate** decreases log-linearly from a short-dispersing,
+  clumped perennial to a far-dispersing annual, representing clonal/lateral
+  spread in perennial herbs versus wind/seed dispersal in annuals
+  [@thomson2011dispersal; @klimesova2009clopla; @bolker1999spatial].
+  
+- **Environmental sensitivity** (`sigma`) increases with `z`: annuals track
+  the environment more closely, while perennials are demographically
+  buffered against bad years [@morris2008longevity; @pfister1998variance].
+  
+- **Environmental optima** are spread evenly over the stationary
+  distribution of the shared AR(1) environment, independent of `z`, so that
+  every life-history type has some species favored in any given year
+  [@adler2006climate].
+  
+- **Intraspecific competition strength** (`alpha`) is drawn around a common
+  mean with log-normal noise.
+
+`comp_matrix_gradient()` turns `z` and `alpha` into a full competition
+matrix, where the effect of species `j` on species `i`'s fecundity combines
+two multiplicative terms on top of intraspecific competition
+\eqn{\alpha_i}: a limiting-similarity term that peaks when `z_i` and `z_j`
+are close [@macarthur1967limiting], and an asymmetry term that lets
+perennials (low `z`) suppress annuals' fecundity more than the reverse
+[@kunstler2016traits; @seabloom2003invasion; @tilman1994competition;
+@levine2002annual]. (`comp_matrix()` and `comp_matrix2()` are older,
+simpler alternatives that assign a fixed number of randomly- or
+structurally-chosen "non-generic" strong competitors per species rather than
+basing competition on the life-history gradient; they are not used in
+`lottery_model_sims.R`.)
+
+## Running a simulation and checking it
+
+`lottery_model_sims.R` sets lattice size, neighborhood radius, dispersal
+truncation, number of time steps/burn-in, immigration rate, and
+environmental AR(1) parameters; draws `nsp` species along the life-history
+axis; builds their parameters and competition matrix; and then loops the
+four-step time-step logic above over a randomly-initialized lattice, saving
+every intermediate lattice and environment value.
+
+After the run, `landscape_diagnostics()` summarizes, per species (after
+discarding `burn_in` steps): mean and final percent cover, whether the
+species persists to the last time step, and a clumping index (the fraction
+of a species' own 8-cell neighborhood that is conspecific, divided by its
+landscape-wide cover -- values above 1 indicate spatial clumping beyond what
+random placement would produce). The script then plots each species' cover
+trajectory through time, colored by its life-history position `z`. Because
+the model is spatially explicit, its equilibrium behavior isn't guaranteed
+to match the non-spatial lottery/storage-effect prediction
+[@durrett1994discrete], and because perennials have long expected lifespans,
+some species can still be drifting slowly after the chosen burn-in
+[@hurtt1995recruitment] -- both reasons to inspect `landscape_diagnostics()`
+and the cover-trajectory plot rather than assume convergence.
+
+## Subsampling into plots
+
+`subsample_lottery_plots.R` treats one simulated landscape as a stand-in for
+a real study area that is only ever observed through small, discrete plots.
+It runs `lottery_model_sims.R` to get a full time series of lattices,
+then:
+
+1. `sample_plot_corners()` randomly picks `n_plots` non-overlapping
+   `plot_size x plot_size` sub-grids (plots) from the lattice.
+2. `plot_cover()` computes each species' proportional cover within each
+   plot at every time step (including explicit zeros).
+3. `lag_cover()` reshapes this into a long data frame keyed by
+   `plot_id`, `time`, and `species`, pairing each time point's cover
+   (`cover_t`) with the previous time point's cover (`cover_tm1`) and the
+   environmental value that drove that transition (`env`, matching the
+   `t-1 -> t` convention used in `scripts/stan/ricker_ss_hurdle_lognormal.stan`).
+
+The resulting `plot_df` is the kind of plot-level, lagged cover data a
+dynamic cover/occupancy model would be fit to, and the script's final plot
+(`cover_t` vs. `cover_tm1`, faceted by species, colored by `env`) is a quick
+visual check that the simulated dynamics look sensible.

@@ -4,7 +4,7 @@ site_author: Ty Tuff
 site_url: https://cu-esiil.github.io/species-interaction-topologies
 
 # Repository
-repo_name: species-interaction-topologies
+repo_name: VegNet
 repo_url: https://github.com/CU-ESIIL/species-interaction-topologies
 # The edit URI points MkDocs Material at the docs/ source so page edit links open in GitHub edit mode.
 edit_uri: edit/main/docs/
@@ -16,6 +16,7 @@ nav:
   - Home: index.md
   - Work Plan: work-plan.md
   - How This Group Works: how-this-group-works.md
+  - Simulations: simulations_docs/simulations_docs.md
   - ESIIL and Team Resources:
       - Team Trainings: esiil-resources/team-trainings.md
       - ESIIL Code of Conduct: esiil-resources/code-of-conduct.md
